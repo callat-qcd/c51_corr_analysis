@@ -1,12 +1,46 @@
-import tables as h5
+#import tables as h5
 import numpy as np
 import gvar as gv
 import sys
-
-
+import copy
+import tables as h5
 '''
 TIME REVERSE
 '''
+
+def make_fit_params(fp,states,gv_data):
+    x = copy.deepcopy(fp.x)
+    y = {k: v[x[k]['t_range']]
+        for (k, v) in gv_data.items() if k.split('_')[0] in states}
+    for k in y:
+        if 'exp_r' in x[k]['type']:
+            sp = k.split('_')[-1]
+            y[k] = y[k] / gv_data[x[k]['denom'][0]+'_'+sp][x[k]['t_range']]
+            y[k] = y[k] / gv_data[x[k]['denom'][1]+'_'+sp][x[k]['t_range']]
+    if any(['mres' in k for k in y]):
+        mres_lst = [k.split('_')[0] for k in y if 'mres' in k]
+        mres_lst = list(set(mres_lst))
+        for k in mres_lst:
+            y[k] = y[k+'_MP'] / y[k+'_PP']
+    
+    n_states = dict()
+    for state in states:
+        for k in x:
+            if state in k:
+                if state in k and 'mres' not in k:
+                    n_states[state] = x[k]['n_state']
+    priors = dict()
+    for k in fp.priors:
+        for state in states:
+            if 'mres' not in k:
+                k_n = int(k.split('_')[-1].split(')')[0])
+                if state == k.split('(')[-1].split('_')[0] and k_n < n_states[state]:
+                    priors[k] = gv.gvar(fp.priors[k].mean, fp.priors[k].sdev)
+            else:
+                mres = k.split('_')[0]
+                if mres in states:
+                    priors[k] = gv.gvar(fp.priors[k].mean, fp.priors[k].sdev)
+    return x,y,n_states,priors
 
 
 def time_reverse(corr, reverse=True, phase=1, time_axis=1):
@@ -56,6 +90,7 @@ def load_h5(f5_file, corr_dict, return_gv=True, rw=None, bl=1, uncorr_corrs=Fals
     for corr in corr_dict:
         weights   = corr_dict[corr]['weights']
         t_reverse = corr_dict[corr]['t_reverse']
+        #d_sets = corr_dict[corr]['d_sets']
         # check if data is in an array or single correlators
         if 'corr_array' not in corr_dict[corr]:
             corr_array = True

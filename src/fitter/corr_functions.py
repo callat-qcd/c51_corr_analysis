@@ -12,6 +12,8 @@ x['pi_SS'] = {'state':'pi'
 
 
 class CorrFunction:
+    def mres_func(self,x,p):
+        return p['mres']*np.ones(x.shape[0])
 
     def En(self, x, p, n):
         '''
@@ -109,6 +111,14 @@ class CorrFunction:
             E_n = self.En(x, p, n)
             r += z_snk * z_src * (np.exp(-E_n*t) + np.exp(-E_n*(T-t)))
         return r
+    
+    def mres(self, x, p):
+        ''' m_res = midpoint_pseudo / pseudo_pseudo
+            we fit to a constant away from early/late time
+            m_res = p[mres_l]
+        '''
+        return p[x['state']]*np.ones_like(x['t_range'])
+    
 
     def mres(self, x, p):
         ''' m_res = midpoint_pseudo / pseudo_pseudo
@@ -251,6 +261,23 @@ class CorrFunction:
 class FitCorr(object):
     def __init__(self):
         self.corr_functions = CorrFunction()
+
+    def get_fit(self,priors,states,x,y):
+        p0 = {k: v.mean for (k, v) in priors.items()}
+        # only pass x for states in fit
+        x_fit = dict()
+        y_fit = dict()
+        fit_lst = [k for k in x if k.split('_')[0] in states]
+        for k in fit_lst:
+            if 'mres' not in k:
+                x_fit[k] = x[k]
+                y_fit[k] = y[k]
+            else:
+                k_res = k.split('_')[0]
+                if k_res not in x_fit:
+                    x_fit[k_res] = x[k]
+                    y_fit[k_res] = y[k_res]
+        return p0,x_fit,y_fit
 
     def priors(self, prior):
         '''
